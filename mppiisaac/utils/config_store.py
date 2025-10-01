@@ -19,17 +19,9 @@ class ExampleConfig:
 
 
 cs = ConfigStore.instance()
-cs.store(name="config_point_robot", node=ExampleConfig)
-cs.store(name="config_multi_point_robot", node=ExampleConfig)
-cs.store(name="config_heijn_robot", node=ExampleConfig)
-cs.store(name="config_boxer_robot", node=ExampleConfig)
-cs.store(name="config_jackal_robot", node=ExampleConfig)
-cs.store(name="config_multi_jackal", node=ExampleConfig)
 cs.store(name="config_panda", node=ExampleConfig)
-cs.store(name="config_omnipanda", node=ExampleConfig)
 cs.store(name="config_panda_push", node=ExampleConfig)
-cs.store(name="config_heijn_push", node=ExampleConfig)
-cs.store(name="config_boxer_push", node=ExampleConfig)
 cs.store(name="config_panda_c_space_goal", node=ExampleConfig)
+cs.store(name="config_xarm6_push", node=ExampleConfig)
 cs.store(group="mppi", name="base_mppi", node=MPPIConfig)
 cs.store(group="isaacgym", name="base_isaacgym", node=IsaacGymConfig)

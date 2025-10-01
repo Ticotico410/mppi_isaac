@@ -1,5 +1,5 @@
 defaults:
-  - mppi: panda_push
+  - mppi: xarm6_push
   - isaacgym: push
 
 goal: [0.5, 0.4, 0.7]
@@ -8,4 +8,4 @@ n_steps: 10
 actors: ['xarm6_stick']
 initial_actor_positions: [[0.0, 0.0, 0.0]]
 
-nx: 14
+nx: 12
