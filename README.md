@@ -59,4 +59,4 @@ python3 heijn_push_client.py
 Simply run one of the example scripts which use Pybullet, for instance for the panda robot:
 ```bash
 python3 panda_robot_with_obstacles.py
-```
+```# mppi_isaac
