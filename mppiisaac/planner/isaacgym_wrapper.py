@@ -538,10 +538,28 @@ class IsaacGymWrapper:
             if self.env_cfg[i + 3].fixed:
                 continue
             self.root_state[:, i + 3] = o_tensor.repeat(self.num_envs, 1)
+            print('tensor updated', o_tensor)
 
         self.gym.set_actor_root_state_tensor(
             self.sim, gymtorch.unwrap_tensor(self.root_state)
         )
+        # self.gym.refresh_actor_root_state_tensor(self.sim)
+        print('updated root state tensor by obstacles tensor', self.root_state[3, :, :])
+
+    def update_block_state_tensor_by_obstacles(self, block_tensor):
+        print('shape of root tensor is', self.root_state.shape)
+        
+        self.root_state[:, 1]   = block_tensor.repeat(self.num_envs, 1)
+        print('block tensor updated', block_tensor)
+            
+        self.gym.set_actor_root_state_tensor(
+            self.sim, gymtorch.unwrap_tensor(self.root_state)
+        )
+        # self.gym.refresh_actor_root_state_tensor(self.sim)
+        self.gym.refresh_actor_root_state_tensor(self.sim)
+        self.gym.refresh_rigid_body_state_tensor(self.sim)
+
+        print('updated block state tensor by obstacles tensor', self.root_state[3, :, :])
 
     def draw_lines(self, lines, env_idx=0):
         # convert list of vertices into line segments

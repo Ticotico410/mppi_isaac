@@ -27,12 +27,12 @@ class Objective(object):
         # self.w_collision=          0.0
 
         # Tuning of the weights for baseline 2
-        self.w_robot_to_block_pos= 10#2
-        self.w_block_to_goal_pos=  25#12.0 
-        self.w_block_to_goal_ort=  21#10.0
-        self.w_ee_hover=           20#5
-        self.w_ee_align=           .3#0.2
-        self.w_push_align=         15#4.2
+        self.w_robot_to_block_pos= 5#2
+        self.w_block_to_goal_pos=  0#12.0 
+        self.w_block_to_goal_ort=  0#10.0
+        self.w_ee_hover=           1#5
+        self.w_ee_align=           0#0.2
+        self.w_push_align=         0#4.2
         self.w_collision=          0.0
 
     
@@ -40,7 +40,7 @@ class Objective(object):
         self.ee_index = 9 # TODO: check if this is correct
         self.block_index = 1 # TODO: check if this is correct
         self.ort_goal_euler = torch.tensor([0, 0, 0], device=cfg.mppi.device)
-        self.ee_hover_height = 0.14
+        self.ee_hover_height = 0.5
 
         self.block_goal_pose_emdn_0 = torch.tensor([0.5, 0.3, 0.5, 0.0, 0.0, 0.0, 1.0], device=cfg.mppi.device)
         self.block_goal_pose_emdn_1 = torch.tensor([0.4, 0.3, 0.5, 0, 0, -0.7071068, 0.7071068], device=cfg.mppi.device) # Rotation 90 deg

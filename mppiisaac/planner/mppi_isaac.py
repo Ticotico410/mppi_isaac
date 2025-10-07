@@ -93,6 +93,8 @@ class MPPIisaacPlanner(object):
         self.sim.save_root_state()
         actions = self.mppi.command(self.state_place_holder).cpu()
         return actions
+    def update_root_state_tensor_by_obstacles_tensor(self, obst_tensor):
+        self.sim.update_block_state_tensor_by_obstacles(bytes_to_torch(obst_tensor))
 
     def reset_rollout_sim(
         self, dof_state_tensor, root_state_tensor, rigid_body_state_tensor
@@ -104,6 +106,11 @@ class MPPIisaacPlanner(object):
 
         self.sim.gym.set_dof_state_tensor(self.sim.sim, gymtorch.unwrap_tensor(self.sim.dof_state))
         self.sim.gym.set_actor_root_state_tensor(self.sim.sim, gymtorch.unwrap_tensor(self.sim.root_state))
+
+    def reset_rollout_only_robot(self, dof_state_tensor):
+        print("reset_rollout_only_robot")
+        self.sim.dof_state[:] = bytes_to_torch(dof_state_tensor)
+        self.sim.gym.set_dof_state_tensor(self.sim.sim, gymtorch.unwrap_tensor(self.sim.dof_state))
 
     def command(self):
         return torch_to_bytes(self.mppi.command(self.state_place_holder))
