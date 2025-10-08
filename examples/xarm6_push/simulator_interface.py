@@ -85,7 +85,7 @@ class IsaacGymSimulator(SimulatorInterface):
         
         # Connect to MPPI planner first
         self.planner = zerorpc.Client()
-        self.planner.connect("tcp://127.0.0.1:4242")
+        self.planner.connect("tcp://127.0.0.1:4243")
         print("MPPI server found!")
         
         # Create a separate Isaac Gym simulation for visualization only
@@ -184,7 +184,7 @@ class SimulatorController:
         # Define goal pose
         if baseline == 2:
             if baseline2_pose == 'left':
-                goal_pose = [0.7, 0.2, 0.5, 0, 0, 0.258819, 0.9659258]
+                goal_pose = [0.3, 0.2, 0.5, 0, 0, 0.258819, 0.9659258]
             elif baseline2_pose == 'center':
                 goal_pose = [0.65, 0, 0.5, 0, 0, 0, 1]
             else:  # right
@@ -204,7 +204,7 @@ class SimulatorController:
             [0.198, 0.198, 0.06, 0.198, 0.565, 0.40, 0.],     # Baseline 2, C
             [0.166, 0.228, 0.08, 0.312, 0.587, 0.39, 0.],     # Baseline 2, D
             [0.153, 0.462, 0.05, 0.181, 0.506, 0.37, 0.],     # Baseline 2, E
-            [0.162, 0.086, 0.068, 0.300, 0.25, 0.8, 0.2]
+            [0.162, 0.086, 0.068, 0.300, 0.25, 0.4, 0.3]
         ]
         
         obj_ = obj_set[obj_index][:]
@@ -284,17 +284,6 @@ class SimulatorController:
             
             # Compute action from MPPI
             if hasattr(self.simulator, 'planner'):
-                # Debug: Check MPPI planner's environment configuration
-                try:
-                    if hasattr(self.simulator.planner, 'sim') and hasattr(self.simulator.planner.sim, 'env_cfg'):
-                        print(f'[simulator_interface] MPPI planner environment config: {len(self.simulator.planner.sim.env_cfg)} objects')
-                        for i, actor in enumerate(self.simulator.planner.sim.env_cfg):
-                            print(f'  Object {i}: {actor.name} (type: {actor.type})')
-                    else:
-                        print('[simulator_interface] Cannot access MPPI planner environment configuration')
-                except Exception as e:
-                    print(f'[simulator_interface] Error accessing MPPI planner config: {e}')
-                
                 action = bytes_to_torch(self.simulator.planner.command())
                 if torch.any(torch.isnan(action)):
                     print("NaN action detected")
