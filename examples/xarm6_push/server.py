@@ -10,15 +10,13 @@ import hydra
 from omegaconf import OmegaConf
 import os
 import torch
-# TODO: from mppiisaac.priors.fabrics_xarm6 import FabricsXarm6Prior
 import zerorpc
 from mppiisaac.utils.config_store import ExampleConfig
 from isaacgym import gymapi
 import time
 from client import Objective
-import sys
-
 import io
+
 
 def torch_to_bytes(t: torch.Tensor) -> bytes:
     buff = io.BytesIO()
@@ -31,6 +29,7 @@ def bytes_to_torch(b: bytes) -> torch.Tensor:
     buff = io.BytesIO(b)
     return torch.load(buff)
 
+
 def reset_trial(sim, init_pos, init_vel):
     sim.stop_sim()
     sim.start_sim()
@@ -42,6 +41,7 @@ def reset_trial(sim, init_pos, init_vel):
                                            init_pos[3], init_vel[3], init_pos[4], init_vel[4], init_pos[5], init_vel[5],
                                           ], device="cuda:0"))
         
+
 @hydra.main(version_base=None, config_path="../../conf", config_name="config_xarm6_push")
 def run_xarm6_robot(cfg: ExampleConfig):
     # Note: Workaround to trigger the dataclasses __post_init__ method
@@ -79,7 +79,6 @@ def run_xarm6_robot(cfg: ExampleConfig):
             goal_pose = [0.5, 0.3, 0.5, 0.0, 0.0, 0.0, 1.0]
         else:
             goal_pose = [0.4, 0.3, 0.5, 0, 0, -0.7071068, 0.7071068]
-
 
                 #  l      w     h     mu      m     x    y
     obj_set =  [[0.100, 0.100, 0.05, 0.200, 0.250, 0.4, 0.],     # Baseline 1, pose 1
@@ -252,7 +251,6 @@ def run_xarm6_robot(cfg: ExampleConfig):
                 print("Time to completion", time_taken)
 
                 reset_trial(sim, init_pos, init_vel)    
-                
                 
                 init_time = time.time()
                 count = 0

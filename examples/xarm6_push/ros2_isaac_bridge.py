@@ -1,30 +1,40 @@
-#!/usr/bin/env python3
-"""
-ROS2 Simulator Bridge - Clean minimal version
-Connects ROS2 Gazebo to MPPI Simulator Interface
-"""
+import time
+import json
+import socket
+import threading
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float64MultiArray
 from gazebo_msgs.msg import ModelStates
-import socket
-import json
-import threading
-import time
+from std_msgs.msg import Float64MultiArray
 
-class ROS2SimulatorBridge(Node):
+
+class ROS2IsaacBridge(Node):
     def __init__(self):
-        super().__init__('ros2_simulator_bridge')
+        super().__init__('ros2_isaac_bridge')
         
-        # Publishers and subscribers
-        self.velocity_pub = self.create_publisher(Float64MultiArray, '/xarm6_velocity_controller/commands', 10)
-        self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
+        # Publishers
+        self.velocity_pub = self.create_publisher(
+            Float64MultiArray, 
+            '/xarm6_velocity_controller/commands', 
+            10
+        )
+
+        # Subscribers
+        self.joint_state_sub = self.create_subscription(
+            JointState, 
+            '/joint_states', 
+            self.joint_state_callback, 
+            10
+        )
         
-        # Subscribe to Gazebo model states
-        self.model_states_sub = self.create_subscription(ModelStates, '/model_states', self.model_states_callback, 10)
-        
+        self.model_states_sub = self.create_subscription(
+            ModelStates, 
+            '/model_states', 
+            self.model_states_callback, 
+            10
+        )
         
         # Socket server
         self.simulator_client = None
@@ -56,24 +66,53 @@ class ROS2SimulatorBridge(Node):
         self.server_thread.daemon = True
         self.server_thread.start()
 
+
     def _handle_connections(self):
         """Handle connections from simulator interface"""
         while True:
-            self.simulator_client, addr = self.socket_server.accept()
-            self.simulator_connected = True
-            self._handle_messages()
+            try:
+                self.simulator_client, addr = self.socket_server.accept()
+                print(f"Client connected from {addr}")
+                self.simulator_connected = True
+                self._handle_messages()
+            except Exception as e:
+                print(f"Error accepting connection: {e}")
+                continue
+
 
     def _handle_messages(self):
         """Handle messages from simulator interface"""
         while self.simulator_connected:
-            data = self.simulator_client.recv(1024)
-            if not data:
-                break
+            try:
+                data = self.simulator_client.recv(1024)
+                if not data:
+                    print("Client disconnected")
+                    break
+                    
+                message = json.loads(data.decode())
                 
-            message = json.loads(data.decode())
+                if message.get('type') == 'action_command':
+                    self._apply_action(message.get('data', []))
+            except ConnectionResetError:
+                print("Connection reset by client")
+                break
+            except json.JSONDecodeError:
+                print("Invalid JSON received")
+                continue
+            except Exception as e:
+                print(f"Error handling messages: {e}")
+                break
+
+
+    def _apply_action(self, action_data):
+        """Apply action to Gazebo via velocity commands"""
+        if len(action_data) != 6:
+            return
             
-            if message.get('type') == 'action_command':
-                self._apply_action(message.get('data', []))
+        velocity_msg = Float64MultiArray()
+        velocity_msg.data = list(action_data)
+        self.velocity_pub.publish(velocity_msg)
+
 
     def joint_state_callback(self, msg):
         """Handle joint states from ROS2"""
@@ -82,6 +121,7 @@ class ROS2SimulatorBridge(Node):
             'velocities': list(msg.velocity),
             'joint_names': list(msg.name)
         }
+
 
     def model_states_callback(self, msg):
         """Extract block pose from model states"""
@@ -101,25 +141,26 @@ class ROS2SimulatorBridge(Node):
         if not self.latest_joint_states or not self.simulator_connected:
             return
             
-        message = {
-            'type': 'joint_states',
-            'data': {
-                'positions': self.latest_joint_states['positions'],
-                'velocities': self.latest_joint_states['velocities'],
-                'joint_names': self.latest_joint_states['joint_names']
+        try:
+            message = {
+                'type': 'joint_states',
+                'data': {
+                    'positions': self.latest_joint_states['positions'],
+                    'velocities': self.latest_joint_states['velocities'],
+                    'joint_names': self.latest_joint_states['joint_names']
+                }
             }
-        }
-        
-        self.simulator_client.send((json.dumps(message) + '\n').encode())
-
-    def _apply_action(self, action_data):
-        """Apply action to Gazebo via velocity commands"""
-        if len(action_data) != 6:
-            return
             
-        velocity_msg = Float64MultiArray()
-        velocity_msg.data = list(action_data)
-        self.velocity_pub.publish(velocity_msg)
+            self.simulator_client.send((json.dumps(message) + '\n').encode())
+        except BrokenPipeError:
+            print("Broken pipe - client disconnected")
+            self.simulator_connected = False
+        except ConnectionResetError:
+            print("Connection reset - client disconnected")
+            self.simulator_connected = False
+        except Exception as e:
+            print(f"Error sending joint states: {e}")
+            self.simulator_connected = False
 
 
     def send_block_pose(self):
@@ -149,7 +190,7 @@ def main(args=None):
     rclpy.init(args=args)
     
     try:
-        bridge = ROS2SimulatorBridge()
+        bridge = ROS2IsaacBridge()
         rclpy.spin(bridge)
     except KeyboardInterrupt:
         pass
@@ -157,4 +198,5 @@ def main(args=None):
         rclpy.shutdown()
 
 if __name__ == '__main__':
+    print("Start running ROS2-Isaac Bridge ...")
     main()

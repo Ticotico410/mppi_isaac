@@ -1,18 +1,14 @@
-#!/usr/bin/env python3
-"""
-Gazebo-only MPPI Simulator Interface
-Works with ROS2 Gazebo via socket communication
-"""
-
-import torch
-import zerorpc
-import time
-import socket
-import threading
-import json
 import io
+import time
+import json
+import torch
+import socket
+import zerorpc
+import threading
+
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+
 
 def torch_to_bytes(t: torch.Tensor) -> bytes:
     buff = io.BytesIO()
@@ -29,7 +25,9 @@ def bytes_to_torch(b: bytes) -> torch.Tensor:
 @dataclass
 class GazeboSimStates:
     dof_state = None
+    block_pose = None
         
+
 class GazeboSimulator:
     """Gazebo simulator via socket communication"""
 
@@ -49,7 +47,7 @@ class GazeboSimulator:
         # Connect to MPPI planner
         print("Connecting to MPPI planner...")
         self.planner = zerorpc.Client()
-        self.planner.connect("tcp://127.0.0.1:4243")
+        self.planner.connect("tcp://127.0.0.1:4242")
         print("MPPI server found!")
         
         print("Using MPPI planner's existing Isaac Gym simulation for tensor generation")
@@ -67,6 +65,11 @@ class GazeboSimulator:
             self.joint_state_thread = threading.Thread(target=self._joint_state_listener)
             self.joint_state_thread.daemon = True
             self.joint_state_thread.start()
+            
+            # # Start block pose listener thread
+            self.block_pose_thread = threading.Thread(target=self._block_pose_listener)
+            self.block_pose_thread.daemon = True
+            self.block_pose_thread.start()
             
             self.socket_available = True
             print("Connected to ROS2 Simulator Bridge")
@@ -121,6 +124,45 @@ class GazeboSimulator:
             except Exception as e:
                 print(f"Error in joint state listener: {e}")
                 break
+
+    def _block_pose_listener(self):
+        """Listen for block pose messages from socket"""
+        buffer = ""
+        time.sleep(1)
+        
+        while self.socket_available:
+            try:
+                data = self.socket.recv(1024)
+                if not data:
+                    break
+                
+                buffer += data.decode()
+                
+                # Process complete JSON messages
+                while '\n' in buffer:
+                    line, buffer = buffer.split('\n', 1)
+                    if line.strip():
+                        try:
+                            message = json.loads(line.strip())
+                            
+                            if message.get('type') == 'block_pose':
+                                position = message.get('data', {}).get('position', [0, 0, 0])
+                                orientation = message.get('data', {}).get('orientation', [0, 0, 0, 1])
+                                
+                                # Store block pose
+                                self.sim.block_pose = {
+                                    'position': position,
+                                    'orientation': orientation
+                                }
+                                time.sleep(0.02)
+                                
+                                
+                        except json.JSONDecodeError:
+                            continue
+                              
+            except Exception as e:
+                print(f"Block pose listener error: {e}")
+                break
         
     def add_objects(self, objects):
         """Add objects to MPPI planner only"""
@@ -135,7 +177,7 @@ class GazeboSimulator:
         baseline2_pose = 'left'
         baseline1_pose = 1
         
-        # Define goal pose
+         # Define goal pose
         if baseline == 2:
             if baseline2_pose == 'left':
                 goal_pose = [0.7, 0.2, 0.5, 0, 0, 0.258819, 0.9659258]
@@ -171,7 +213,7 @@ class GazeboSimulator:
                 "type": "box",
                 "name": "obj_to_push",
                 "size": [obj_[0], obj_[1], obj_[2]],
-                "init_pos": [0.6, 0.2, table_dim[-1] + obj_[2] / 2],
+                "init_pos": [0.69,0.2, table_dim[-1] + obj_[2] / 2],
                 "mass": obj_[4],
                 "fixed": False,
                 "handle": None,
@@ -230,13 +272,37 @@ class GazeboSimulator:
     def sync_with_mppi(self):
         """Sync with MPPI planner using a specific instance for efficiency"""
         if self.planner:
-            #TODO figure out how to rollout states into isaacgym
+            self._update_planner_with_block_pose()
             self.planner.reset_rollout_only_robot(torch_to_bytes(self.sim.dof_state[0]))
-            # print('state vector looks like this:', self.sim.dof_state[0])    
+    
+    def _update_planner_with_block_pose(self):
+        """Update MPPI planner with current block pose from Gazebo"""
+        block_pose = self.get_block_pose()
+        if not block_pose:
+            return
+            
+        position = block_pose['position']
+        orientation = block_pose['orientation']
+        velocities = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Zero velocities
+        
+        
+        cube_obstacle_tensor = torch.tensor([
+            round(position[0], 2), round(position[1], 2), 0.14,  # x, y, z
+            orientation[0], orientation[1], orientation[2], orientation[3],  # qx, qy, qz, qw
+            velocities[0], velocities[1], velocities[2],  # vx, vy, vz
+            velocities[3], velocities[4], velocities[5]   # wx, wy, wz
+        ], device="cuda:0")
+        print('block position is', position)
+        
+        self.planner.update_root_state_tensor_by_obstacles_tensor(torch_to_bytes(cube_obstacle_tensor))    
            
     def get_timestep(self):
         """Get Gazebo timestep"""
         return self.dt
+    
+    def get_block_pose(self):
+        """Get current block pose"""
+        return self.sim.block_pose
         
     def cleanup(self):
         """Clean up"""
@@ -248,7 +314,7 @@ class GazeboSimulator:
                 self.socket.close()
 
 
-class SimulatorController:
+class MPPIController:
     """Controller that orchestrates the simulation"""
     
     def __init__(self, simulator):
@@ -313,11 +379,11 @@ def main():
     
     cfg = MinimalConfig()
     
-    # Create Gazebo simulator
+    # Create Gazebo-based simulator
     simulator = GazeboSimulator()
     
-    # Create controller
-    controller = SimulatorController(simulator)
+    # Create MPPI controller
+    controller = MPPIController(simulator)
     
     try:
         # Initialize and run

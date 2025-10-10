@@ -559,7 +559,7 @@ class IsaacGymWrapper:
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
 
-        print('updated block state tensor by obstacles tensor', self.root_state[3, :, :])
+        # print('updated block state tensor by obstacles tensor', self.root_state[3, :, :])
 
     def draw_lines(self, lines, env_idx=0):
         # convert list of vertices into line segments

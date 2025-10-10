@@ -1,23 +1,22 @@
 import gym
+from mpscenes.goals.static_sub_goal import StaticSubGoal
 import numpy as np
-from urdfenvs.robots.generic_urdf import GenericUrdfReacher
 from mppiisaac.planner.mppi_isaac import MPPIisaacPlanner
+from urdfenvs.robots.generic_urdf import GenericUrdfReacher
 import hydra
 from omegaconf import OmegaConf
 import os
 import torch
-from urdfenvs.sensors.full_sensor import FullSensor
-from mpscenes.obstacles.sphere_obstacle import SphereObstacle
-from mpscenes.goals.static_sub_goal import StaticSubGoal
-from mppiisaac.priors.fabrics_panda import FabricsPandaPrior
-
+import mppiisaac
 from mppiisaac.utils.config_store import ExampleConfig
 
 # MPPI to navigate a simple robot to a goal position
 
 urdf_file = (
-    os.path.dirname(os.path.abspath(__file__)) + "/../assets/urdf/panda_bullet/panda.urdf"
+    os.path.dirname(os.path.abspath(__file__))
+    + "/../assets/urdf/panda_bullet/panda.urdf"
 )
+
 
 class JointSpaceGoalObjective(object):
     def __init__(self, cfg, device):
@@ -33,19 +32,31 @@ class JointSpaceGoalObjective(object):
                 sim.dof_state[:, 8].unsqueeze(1),
                 sim.dof_state[:, 10].unsqueeze(1),
                 sim.dof_state[:, 12].unsqueeze(1),
-            ), 1)
-        #dof_states = gym.acquire_dof_state_tensor(sim)
+            ),
+            1,
+        )
+        # dof_states = gym.acquire_dof_state_tensor(sim)
         return torch.clamp(
             torch.linalg.norm(pos - self.nav_goal, axis=1) - 0.05, min=0, max=1999
         )
 
+
 class EndEffectorGoalObjective(object):
     def __init__(self, cfg, device):
         self.nav_goal = torch.tensor(cfg.goal, device=cfg.mppi.device)
+        self.ort_goal = torch.tensor([1, 0, 0, 0], device=cfg.mppi.device)
 
     def compute_cost(self, sim):
         pos = sim.rigid_body_state[:, sim.robot_rigid_body_ee_idx, :3]
-        return 10 * torch.linalg.norm(pos - self.nav_goal, axis=1)
+        ort = sim.rigid_body_state[:, sim.robot_rigid_body_ee_idx, 3:7]
+        # dof_states = gym.acquire_dof_state_tensor(sim)
+
+        reach_cost = torch.linalg.norm(pos - self.nav_goal, axis=1)
+        align_cost = torch.linalg.norm(ort - self.ort_goal, axis=1)
+        return 10 * reach_cost + align_cost
+        # return torch.clamp(
+        #     torch.linalg.norm(pos - self.nav_goal, axis=1) - 0.05, min=0, max=1999
+        # )
 
 
 def initalize_environment(cfg):
@@ -63,25 +74,9 @@ def initalize_environment(cfg):
     robots = [
         GenericUrdfReacher(urdf=urdf_file, mode="vel"),
     ]
-    env: UrdfEnv = gym.make("urdf-env-v0", dt=0.01, robots=robots, render=cfg.render, observation_checking=False)
-
+    env: UrdfEnv = gym.make("urdf-env-v0", dt=0.01, robots=robots, render=cfg.render)
     # Set the initial position and velocity of the panda arm.
     env.reset()
-
-    # add obstacle
-    obst1Dict = {
-        "type": "sphere",
-        "geometry": {"position": [0.3, 0.3, 0.3], "radius": 0.1},
-    }
-    sphereObst1 = SphereObstacle(name="simpleSphere", content_dict=obst1Dict)
-    env.add_obstacle(sphereObst1)
-
-    obst2Dict = {
-        "type": "sphere",
-        "geometry": {"position": [0.3, 0.5, 0.6], "radius": 0.06},
-    }
-    sphereObst2 = SphereObstacle(name="simpleSphere", content_dict=obst2Dict)
-    env.add_obstacle(sphereObst2)
     goal_dict = {
         "weight": 1.0,
         "is_primary_goal": True,
@@ -94,15 +89,6 @@ def initalize_environment(cfg):
     }
     goal = StaticSubGoal(name="simpleGoal", content_dict=goal_dict)
     env.add_goal(goal)
-
-    # sense both
-    sensor = FullSensor(
-        goal_mask=["position"],
-        obstacle_mask=["position", "velocity", "size"],
-        variance=0.0,
-    )
-    env.add_sensor(sensor, [0])
-    env.set_spaces()
     return env
 
 
@@ -116,12 +102,8 @@ def set_planner(cfg):
         The goal to the motion planning problem.
     """
     objective = EndEffectorGoalObjective(cfg, cfg.mppi.device)
-    #objective = JointSpaceGoalObjective(cfg, cfg.mppi.device)
-    if cfg.mppi.use_priors == True:
-        prior = FabricsPandaPrior(cfg)
-    else:
-        prior = None
-    planner = MPPIisaacPlanner(cfg, objective, prior)
+    # objective = JointSpaceGoalObjective(cfg, cfg.mppi.device)
+    planner = MPPIisaacPlanner(cfg, objective, prior=None)
 
     return planner
 
@@ -143,7 +125,6 @@ def run_panda_robot(cfg: ExampleConfig):
     # Note: Workaround to trigger the dataclasses __post_init__ method
     cfg = OmegaConf.to_object(cfg)
 
-
     env = initalize_environment(cfg)
     planner = set_planner(cfg)
 
@@ -153,11 +134,9 @@ def run_panda_robot(cfg: ExampleConfig):
     for _ in range(cfg.n_steps):
         # Calculate action with the fabric planner, slice the states to drop Z-axis [3] information.
         ob_robot = ob["robot_0"]
-        obst = ob["robot_0"]["FullSensor"]['obstacles']
         action = planner.compute_action(
             q=ob_robot["joint_state"]["position"],
             qdot=ob_robot["joint_state"]["velocity"],
-            obst=obst
         )
         (
             ob,

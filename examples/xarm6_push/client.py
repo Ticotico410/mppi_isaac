@@ -6,8 +6,6 @@ import hydra
 from omegaconf import OmegaConf
 import os
 import torch
-from mppiisaac.priors.fabrics_panda import FabricsPandaPrior
-# TODO: from mppiisaac.priors.fabrics_xarm6 import FabricsXarm6Prior
 import zerorpc
 import pytorch3d.transforms
 import time
@@ -18,27 +16,27 @@ class Objective(object):
     def __init__(self, cfg, device):
         
         # Tuning of the weights for baseline 1 
-        # self.w_robot_to_block_pos= 1#2
-        # self.w_block_to_goal_pos=  16#6.0 
-        # self.w_block_to_goal_ort=  2#2.0
-        # self.w_ee_hover=           8#5
-        # self.w_ee_align=           0.5#0.5
-        # self.w_push_align=         0.8#0.4
+        # self.w_robot_to_block_pos= 1 #2
+        # self.w_block_to_goal_pos=  16 #6.0 
+        # self.w_block_to_goal_ort=  2 #2.0
+        # self.w_ee_hover=           8 #5
+        # self.w_ee_align=           0.5 #0.5
+        # self.w_push_align=         0.8 #0.4
         # self.w_collision=          0.0
 
         # Tuning of the weights for baseline 2
-        self.w_robot_to_block_pos= 10#2
-        self.w_block_to_goal_pos=  25#12.0 
-        self.w_block_to_goal_ort=  0#10.0
-        self.w_ee_hover=           20#5
-        self.w_ee_align=           .3#0.2
-        self.w_push_align=         15#4.2
+        self.w_robot_to_block_pos= 10 #2
+        self.w_block_to_goal_pos=  25 #12.0 
+        self.w_block_to_goal_ort=  0 #10.0
+        self.w_ee_hover=           0 #5
+        self.w_ee_align=           0.3 #0.2
+        self.w_push_align=         15 #4.2
         self.w_collision=          0.0
 
     
         # Task configration for comparison with baselines
-        self.ee_index = 9 # TODO: check if this is correct
-        self.block_index = 1 # TODO: check if this is correct
+        self.ee_index = 9
+        self.block_index = 1
         self.ort_goal_euler = torch.tensor([0, 0, 0], device=cfg.mppi.device)
         self.ee_hover_height = 0.14
 
@@ -57,7 +55,7 @@ class Objective(object):
         self.success = False
         self.ee_celebration = 0.25
         self.count = 0
-        self.obst_index = 11 # TODO: check if this is correct
+        self.obst_index = 11
 
     def compute_metrics(self, block_pos, block_ort):
 
@@ -83,7 +81,6 @@ class Objective(object):
         # Compute yaw from quaternion with formula directly
         block_yaws = torch.atan2(2.0 * (block_ort[:,-1] * block_ort[:,2] + block_ort[:,0] * block_ort[:,1]), block_ort[:,-1] * block_ort[:,-1] + block_ort[:,0] * block_ort[:,0] - block_ort[:,1] * block_ort[:,1] - block_ort[:,2] * block_ort[:,2])
         #self.block_yaws = pytorch3d.transforms.matrix_to_euler_angles(pytorch3d.transforms.quaternion_to_matrix(block_ort), "ZYX")[:, -1]
-
 
         # Distance costs
         robot_to_block_dist = torch.linalg.norm(robot_to_block[:, 0:2], axis = 1)
@@ -114,17 +111,14 @@ class Objective(object):
 
         return total_cost
 
+
 @hydra.main(version_base=None, config_path="../../conf", config_name="config_xarm6_push")
 def run_xarm6_robot(cfg: ExampleConfig):
     # Note: Workaround to trigger the dataclasses __post_init__ method
     cfg = OmegaConf.to_object(cfg)
 
     objective = Objective(cfg, cfg.mppi.device)
-    if cfg.mppi.use_priors == True:
-        prior = FabricsPandaPrior(cfg)
-    else:
-        prior = None
-    planner = zerorpc.Server(MPPIisaacPlanner(cfg, objective, prior))
+    planner = zerorpc.Server(MPPIisaacPlanner(cfg, objective, prior=None))
     planner.bind("tcp://0.0.0.0:4242")
     planner.run()
 
