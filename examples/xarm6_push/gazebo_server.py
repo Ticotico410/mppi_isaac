@@ -1,4 +1,5 @@
 import io
+import os
 import time
 import json
 import torch
@@ -39,6 +40,12 @@ class GazeboSimulator:
         self.cfg = None
         self.planner = None
         self.index_order = None
+
+        # Docker/Environment configuration
+        self.bridge_host = os.getenv('BRIDGE_HOST', 'localhost')
+        self.bridge_port = int(os.getenv('BRIDGE_PORT', '9090'))
+        self.is_docker = os.getenv('DOCKER_ENV', 'false').lower() == 'true'
+        
         
     def initialize(self, cfg):
         """Connect to Gazebo via ROS2 Simulator Bridge"""
@@ -53,11 +60,13 @@ class GazeboSimulator:
         print("Using MPPI planner's existing Isaac Gym simulation for tensor generation")
         
         # Try to connect to ROS2 Simulator Bridge
-        print("Connecting to ROS2 Simulator Bridge...")
+        print(f"Connecting to ROS2 Simulator Bridge at {self.bridge_host}:{self.bridge_port}...")
+        if self.is_docker:
+            print("Docker environment detected")
         try:
             # Connect to ROS2 Simulator Bridge socket
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.connect(('localhost', 9090))  # ROS2 Simulator Bridge port
+            self.socket.connect((self.bridge_host, self.bridge_port))
             
             # Initialize joint state storage
             self.sim.dof_state = torch.zeros(1, 12, device="cuda:0")
@@ -76,7 +85,9 @@ class GazeboSimulator:
             
         except Exception as e:
             print(f"Failed to connect to ROS2 Simulator Bridge: {e}")
-            print("Make sure ROS2 Simulator Bridge is running on port 9090")
+            print(f"Make sure ROS2 Simulator Bridge is running on {self.bridge_host}:{self.bridge_port}")
+            if self.is_docker:
+                print("Docker tip: Ensure the bridge container is running and ports are properly exposed")
             self.socket_available = False
             # Initialize joint state storage
 

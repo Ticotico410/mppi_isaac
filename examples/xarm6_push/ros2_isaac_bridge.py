@@ -1,18 +1,28 @@
-import time
-import json
-import socket
-import threading
-
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from gazebo_msgs.msg import ModelStates
 from std_msgs.msg import Float64MultiArray
 
+import os
+import time
+import json
+import socket
+import threading
+
 
 class ROS2IsaacBridge(Node):
     def __init__(self):
         super().__init__('ros2_isaac_bridge')
+        
+        # Docker/Environment configuration
+        self.socket_port = int(os.getenv('BRIDGE_PORT', '9090'))
+        self.socket_host = os.getenv('BRIDGE_HOST', '0.0.0.0')
+        self.is_docker = os.getenv('DOCKER_ENV', 'false').lower() == 'true'
+        
+        if self.is_docker:
+            self.get_logger().info("Running in Docker environment")
+            self.get_logger().info(f"Socket server will bind to {self.socket_host}:{self.socket_port}")
         
         # Publishers
         self.velocity_pub = self.create_publisher(
@@ -59,8 +69,11 @@ class ROS2IsaacBridge(Node):
         """Start socket server for simulator interface"""
         self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket_server.bind(('localhost', 9090))
+
+        # Use configurable host and port for Docker compatibility
+        self.socket_server.bind((self.socket_host, self.socket_port))
         self.socket_server.listen(1)
+        self.get_logger().info(f"Socket server listening on {self.socket_host}:{self.socket_port}")
         
         self.server_thread = threading.Thread(target=self._handle_connections)
         self.server_thread.daemon = True
@@ -70,14 +83,9 @@ class ROS2IsaacBridge(Node):
     def _handle_connections(self):
         """Handle connections from simulator interface"""
         while True:
-            try:
-                self.simulator_client, addr = self.socket_server.accept()
-                print(f"Client connected from {addr}")
-                self.simulator_connected = True
-                self._handle_messages()
-            except Exception as e:
-                print(f"Error accepting connection: {e}")
-                continue
+            self.simulator_client, addr = self.socket_server.accept()
+            self.simulator_connected = True
+            self._handle_messages()
 
 
     def _handle_messages(self):
@@ -102,8 +110,7 @@ class ROS2IsaacBridge(Node):
             except Exception as e:
                 print(f"Error handling messages: {e}")
                 break
-
-
+    
     def _apply_action(self, action_data):
         """Apply action to Gazebo via velocity commands"""
         if len(action_data) != 6:
@@ -178,6 +185,7 @@ class ROS2IsaacBridge(Node):
         
         self.simulator_client.send((json.dumps(message) + '\n').encode())
 
+
     def destroy_node(self):
         """Clean up when node is destroyed"""
         if hasattr(self, 'socket_server'):
@@ -185,6 +193,7 @@ class ROS2IsaacBridge(Node):
         if self.simulator_client:
             self.simulator_client.close()
         super().destroy_node()
+
 
 def main(args=None):
     rclpy.init(args=args)

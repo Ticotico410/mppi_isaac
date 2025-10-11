@@ -56,7 +56,10 @@ ros2 run controller_manager spawner xarm6_velocity_controller --controller-type 
 ```
 Setup default joint pose within the xArm6 joint range:
 ```bash 
-ros2 topic pub --once /xarm6_traj_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory "{joint_names: ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'], points: [{positions: [0.0, -0.78,-0.78, 0.0, 1.5708, 0.0], time_from_start: {sec: 5, nanosec: 0}}]}"
+ros2 topic pub --once /xarm6_traj_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory "{joint_names: ['xarm6_joint1', 'xarm6_j
+oint2', 'xarm6_joint3', 'xarm6_joint4', 'xarm6_joint5', 'xarm6_joint6'], points:
+ [{positions: [0.0, -0.78,-0.78, 0.0, 1.5708, 0.0], time_from_start: {sec: 5, na
+nosec: 0}}]}"time_from_start: {sec: 5, nanosec: 0}}]}"
 ```
 Disable trajectory based controller:
 ```bash 
